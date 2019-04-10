@@ -1,0 +1,10 @@
+graphql-core==2.1
+neo4j==1.7.2
+neobolt==1.7.4
+neotime==1.7.4
+promise==2.2.1
+python-dotenv==0.10.1
+pytz==2018.9
+Rx==1.6.1
+sgqlc==7.0
+six==1.12.0
