@@ -1,0 +1,52 @@
+<html>
+    <head>
+        <title>DataViz</title>
+        <style type="text/css">
+            #viz {
+                width: 100%;
+                height: 100%;
+            }
+        </style><script src="https://cdn.neo4jlabs.com/neovis.js/v1.0.0/neovis.js"></script>
+    </head>   
+    <script>
+        function draw() {
+            var config = {
+                interaction: {
+                    hover: true,
+                    keyboard: {
+                        enabled: true,
+                        bindToWindow: false
+                    },
+                    navigationButtons: true,
+                    tooltipDelay: 1000000,
+                    hideEdgesOnDrag: true,
+                    zoomView: false
+                },
+                container_id: "viz",
+                server_url: "bolt://localhost:7687",
+                server_user: "neo4j",
+                server_password: "super2008",
+                labels: {
+                    "Person": {
+                        caption: "name",
+                        size: "pagerank"
+                    },
+
+                },
+                relationships: {
+                    "KNOWS": {
+                        caption: false,
+                        thickness: "count"
+                    }
+                },
+                initial_cypher: 'MATCH p=(:Person)-[:KNOWS]->(:Person) RETURN p'
+                //initial_cypher: 'MATCH (tom:Person {name: "Tom Hanks"})-[r:ACTED_IN]->(tomHanksMovies)<- RETURN r,tom,tomHanksMovies',
+            }
+            var viz = new NeoVis.default(config);
+            viz.render();
+        }
+    </script>
+    <body onload="draw()">
+        <div id="viz"></div>
+    </body>
+</html>
