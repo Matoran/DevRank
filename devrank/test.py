@@ -30,13 +30,16 @@ def create_relation(tx, repo, user):
 
 
 def build_knows_relation(tx):
+    print("Building knows relationships")
     tx.run("MATCH (u1:User)-[:CONTRIBUTES]->()<-[:CONTRIBUTES]-(u2:User) CREATE UNIQUE (u1)-[:KNOWS]->(u2)")
 
 
 def compute_pagerank(tx):
+    print("calculating pagerank")
     tx.run("CALL algo.pageRank('User','KNOWS',{iterations:20, dampingFactor:0.85, write: true,writeProperty:'pagerank'})")
 
 
+# TODO pagination for queries, think about queuing next user so that we can dive from the users we find here
 def query_for_user(login):
     query = f"""
     query{{
@@ -44,7 +47,7 @@ def query_for_user(login):
         name
         login
         location
-        repositoriesContributedTo(includeUserRepositories: true ,first: 100, orderBy: {{field: PUSHED_AT, direction: DESC}}, contributionTypes: [COMMIT, PULL_REQUEST]) {{
+        repositoriesContributedTo(includeUserRepositories: true ,first: 100, orderBy: {{field: PUSHED_AT, direction: DESC}}, contributionTypes: [COMMIT, PULL_REQUEST], privacy:PUBLIC) {{
           nodes {{
             name
             nameWithOwner
@@ -96,9 +99,19 @@ def query_for_user(login):
                 driver.session().write_transaction(create_relation, repo['nameWithOwner'], collab['login'])
 
 
-query_for_user("matoran")
-query_for_user("torvalds")
+query_for_user("maximelovino")
+query_for_user("Angorance")
+query_for_user("stevenliatti")
+query_for_user("Xcaliburne")
+query_for_user("lekikou")
+query_for_user("ProtectedVariable")
+query_for_user("RaedAbr")
+query_for_user("leadrien")
+query_for_user("selinux")
 query_for_user("ry")
+query_for_user("torvalds")
+query_for_user("matoran")
+query_for_user("anirul")
 
 driver.session().write_transaction(build_knows_relation)
 driver.session().write_transaction(compute_pagerank)
