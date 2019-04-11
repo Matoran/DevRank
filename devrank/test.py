@@ -1,12 +1,16 @@
 from sgqlc.endpoint.http import HTTPEndpoint
 from dotenv import load_dotenv
 import os
+import queue
 
 from neo4j import GraphDatabase
 
 from neobolt.exceptions import ConstraintError
 
 load_dotenv()
+
+users_already_done = set()
+to_process = queue.Queue()
 
 # Used CREATE CONSTRAINT ON (n:User) ASSERT n.login IS UNIQUE / CREATE CONSTRAINT ON (n:Repo) ASSERT n.name IS UNIQUE => to get unique nodes
 
@@ -41,6 +45,12 @@ def compute_pagerank(tx):
 
 # TODO pagination for queries, think about queuing next user so that we can dive from the users we find here
 def query_for_user(login):
+    if login in users_already_done:
+        print(f"login already done {login}")
+        return
+    else:
+        print(f"add {login} to already done")
+        users_already_done.add(login)
     query = f"""
     query{{
       user(login: "{login}") {{
@@ -66,7 +76,12 @@ def query_for_user(login):
     }}
     """
     endpoint = HTTPEndpoint(url, headers)
-    user = endpoint(query)['data']['user']
+    try:
+        user = endpoint(query)['data']['user']
+    except Exception as e:
+        print(e)
+        exit(1)
+
     repos = user['repositoriesContributedTo']['nodes']
     print(user['name'])
     try:
@@ -90,6 +105,8 @@ def query_for_user(login):
         if repo['mentionableUsers']:
             for collab in repo['mentionableUsers']['nodes']:
                 print(collab)
+                if collab['login'] not in users_already_done:
+                    to_process.put(collab['login'])
                 try:
                     driver.session().write_transaction(create_user, collab['login'], collab['location'])
                 except ConstraintError:
@@ -97,6 +114,8 @@ def query_for_user(login):
                 except:
                     print("Problem creating user")
                 driver.session().write_transaction(create_relation, repo['nameWithOwner'], collab['login'])
+    while not to_process.empty():
+        query_for_user(to_process.get())
 
 
 query_for_user("maximelovino")
