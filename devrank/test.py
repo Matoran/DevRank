@@ -44,7 +44,9 @@ def compute_pagerank(tx):
 
 
 # TODO pagination for queries, think about queuing next user so that we can dive from the users we find here
-def query_for_user(login):
+def query_for_user(login, max_hops=3):
+    if max_hops < 0:
+        return
     if login in users_already_done:
         print(f"login already done {login}")
         return
@@ -80,7 +82,8 @@ def query_for_user(login):
         user = endpoint(query)['data']['user']
     except Exception as e:
         print(e)
-        exit(1)
+        print(type(e))
+        return
 
     repos = user['repositoriesContributedTo']['nodes']
     print(user['name'])
@@ -115,7 +118,7 @@ def query_for_user(login):
                     print("Problem creating user")
                 driver.session().write_transaction(create_relation, repo['nameWithOwner'], collab['login'])
     while not to_process.empty():
-        query_for_user(to_process.get())
+        query_for_user(to_process.get(), max_hops - 1)
 
 
 query_for_user("maximelovino")
