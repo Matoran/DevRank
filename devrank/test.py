@@ -1,3 +1,5 @@
+import sys
+
 from sgqlc.endpoint.http import HTTPEndpoint
 from dotenv import load_dotenv
 import os
@@ -13,6 +15,7 @@ users_already_done = set()
 to_process = queue.Queue()
 
 # Used CREATE CONSTRAINT ON (n:User) ASSERT n.login IS UNIQUE / CREATE CONSTRAINT ON (n:Repo) ASSERT n.name IS UNIQUE => to get unique nodes
+# CREATE CONSTRAINT ON (n:Language) ASSERT n.name IS UNIQUE
 
 driver = GraphDatabase.driver("bolt://localhost:7687", auth=(os.getenv("DB_USER"), os.getenv("DB_PASS")))
 
@@ -29,6 +32,14 @@ def create_repo(tx, name):
     tx.run(f"CREATE (a:Repo {{name: '{name}'}})")
 
 
+def create_lang(tx, name):
+    tx.run(f"CREATE (a:Language {{name: '{name}'}})")
+
+
+def create_lang_relation(tx, repo, lang, size):
+    tx.run(f"MATCH (lang:Language{{name:'{lang}'}}),(repo:Repo{{name:'{repo}'}}) CREATE UNIQUE (repo)-[r:CONTAINS{{size:{size}}}]->(lang) return r")
+
+
 def create_relation(tx, repo, user):
     tx.run(f"MATCH (user:User{{login:'{user}'}}),(repo:Repo{{name:'{repo}'}}) CREATE UNIQUE (user)-[r:CONTRIBUTES]->(repo) return r")
 
@@ -36,6 +47,10 @@ def create_relation(tx, repo, user):
 def build_knows_relation(tx):
     print("Building knows relationships")
     tx.run("MATCH (u1:User)-[:CONTRIBUTES]->()<-[:CONTRIBUTES]-(u2:User) CREATE UNIQUE (u1)-[:KNOWS]->(u2)")
+
+
+def build_codes_relation(tx):
+    tx.run("MATCH (u1:User)-[:CONTRIBUTES]->()-[:CONTAINS]->(l:Language) CREATE UNIQUE (u1)-[:CODES_IN]->(l)")
 
 
 def compute_pagerank(tx):
@@ -63,6 +78,17 @@ def query_for_user(login, max_hops=3):
           nodes {{
             name
             nameWithOwner
+            languages(orderBy: {{field: SIZE, direction: DESC}}, first: 3) {{
+              totalSize
+              edges {{
+                size
+                node {{
+                  name
+                  id
+                  color
+                }}
+              }}
+            }}
             mentionableUsers(first: 100) {{
               nodes {{
                 ... on User {{
@@ -105,6 +131,18 @@ def query_for_user(login, max_hops=3):
         except:
             print("Problem creating repo")
         driver.session().write_transaction(create_relation, repo['nameWithOwner'], user['login'])
+
+        if repo['languages']:
+            languages = repo['languages']
+            for edge in languages['edges']:
+                size = edge['size']
+                lang = edge['node']
+                try:
+                    driver.session().write_transaction(create_lang, lang['name'])
+                except ConstraintError:
+                    print("language already exists")
+                driver.session().write_transaction(create_lang_relation, repo['nameWithOwner'], lang['name'], size)
+
         if repo['mentionableUsers']:
             for collab in repo['mentionableUsers']['nodes']:
                 print(collab)
@@ -121,21 +159,22 @@ def query_for_user(login, max_hops=3):
         query_for_user(to_process.get(), max_hops - 1)
 
 
-query_for_user("maximelovino")
-query_for_user("Angorance")
-query_for_user("stevenliatti")
-query_for_user("Xcaliburne")
-query_for_user("lekikou")
-query_for_user("ProtectedVariable")
-query_for_user("RaedAbr")
-query_for_user("leadrien")
-query_for_user("selinux")
-query_for_user("ry")
+#query_for_user("maximelovino")
+#query_for_user("Angorance")
+#query_for_user("stevenliatti")
+#query_for_user("Xcaliburne")
+#query_for_user("lekikou")
+#query_for_user("ProtectedVariable")
+#query_for_user("RaedAbr")
+# query_for_user("RalfJung")
+# query_for_user("selinux")
+# query_for_user("ry")
 query_for_user("torvalds")
-query_for_user("matoran")
-query_for_user("anirul")
+# query_for_user("matoran")
+# query_for_user("anirul")
 
 driver.session().write_transaction(build_knows_relation)
+driver.session().write_transaction(build_codes_relation)
 driver.session().write_transaction(compute_pagerank)
 
 driver.close()
