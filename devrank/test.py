@@ -58,7 +58,6 @@ def compute_pagerank(tx):
     tx.run("CALL algo.pageRank('User','KNOWS',{iterations:20, dampingFactor:0.85, write: true,writeProperty:'pagerank'})")
 
 
-# TODO pagination for queries, think about queuing next user so that we can dive from the users we find here
 def query_for_user(login, max_hops=3):
     if max_hops < 0:
         return
@@ -78,6 +77,7 @@ def query_for_user(login, max_hops=3):
           nodes {{
             name
             nameWithOwner
+            owner{{login}}
             languages(orderBy: {{field: SIZE, direction: DESC}}, first: 3) {{
               totalSize
               edges {{
@@ -143,35 +143,82 @@ def query_for_user(login, max_hops=3):
                     print("language already exists")
                 driver.session().write_transaction(create_lang_relation, repo['nameWithOwner'], lang['name'], size)
 
-        if repo['mentionableUsers']:
-            for collab in repo['mentionableUsers']['nodes']:
-                print(collab)
-                if collab['login'] not in users_already_done:
-                    to_process.put(collab['login'])
-                try:
-                    driver.session().write_transaction(create_user, collab['login'], collab['location'])
-                except ConstraintError:
-                    print("User already exists")
-                except:
-                    print("Problem creating user")
-                driver.session().write_transaction(create_relation, repo['nameWithOwner'], collab['login'])
+        query_for_mentionable_users(repo['owner']['login'], repo['name'])
+
     while not to_process.empty():
         query_for_user(to_process.get(), max_hops - 1)
 
 
-#query_for_user("maximelovino")
-#query_for_user("Angorance")
-#query_for_user("stevenliatti")
-#query_for_user("Xcaliburne")
-#query_for_user("lekikou")
-#query_for_user("ProtectedVariable")
-#query_for_user("RaedAbr")
-# query_for_user("RalfJung")
-# query_for_user("selinux")
-# query_for_user("ry")
+def query_for_mentionable_users(repo_owner, repo_name, after=None):
+    if isinstance(after, str):
+        after = f"\"{after}\""
+    else:
+        after = "null"
+
+    query = f"""
+    query {{
+      repository(owner: "{repo_owner}", name: "{repo_name}") {{
+        name
+        nameWithOwner
+        mentionableUsers(first: 10, after: {after}) {{
+          totalCount
+          pageInfo {{
+            hasNextPage
+            endCursor
+            hasPreviousPage
+            startCursor
+          }}
+          nodes {{
+            ... on User {{
+              login
+              name
+              location
+            }}
+          }}
+        }}
+      }}
+    }}
+    """
+    endpoint = HTTPEndpoint(url, headers)
+    try:
+        repo = endpoint(query)['data']['repository']
+    except Exception as e:
+        print(e)
+        print(type(e))
+        return
+    if repo['mentionableUsers']:
+        for collab in repo['mentionableUsers']['nodes']:
+            print(collab)
+            if collab['login'] not in users_already_done:
+                to_process.put(collab['login'])
+            try:
+                driver.session().write_transaction(create_user, collab['login'], collab['location'])
+            except ConstraintError:
+                print("User already exists")
+            except:
+                print("Problem creating user")
+            driver.session().write_transaction(create_relation, repo['nameWithOwner'], collab['login'])
+
+    if repo['mentionableUsers']['pageInfo']['hasNextPage']:
+        query_for_mentionable_users(repo_owner, repo_name, repo['mentionableUsers']['pageInfo']['endCursor'])
+
+    return
+
+
+query_for_user("maximelovino")
+query_for_user("Dawen18", 1)
+query_for_user("Angorance")
+query_for_user("stevenliatti")
+query_for_user("Xcaliburne")
+query_for_user("lekikou")
+query_for_user("ProtectedVariable")
+query_for_user("RaedAbr")
+query_for_user("RalfJung")
+query_for_user("selinux")
+query_for_user("ry")
 query_for_user("torvalds")
-# query_for_user("matoran")
-# query_for_user("anirul")
+query_for_user("matoran")
+query_for_user("anirul")
 
 driver.session().write_transaction(build_knows_relation)
 driver.session().write_transaction(build_codes_relation)
