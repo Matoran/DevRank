@@ -12,7 +12,9 @@ from neobolt.exceptions import ConstraintError
 load_dotenv()
 
 users_already_done = set()
-to_process = queue.Queue()
+users_to_process = queue.Queue()
+repos_already_done = set()
+repos_to_process = queue.Queue()
 
 # Used CREATE CONSTRAINT ON (n:User) ASSERT n.login IS UNIQUE / CREATE CONSTRAINT ON (n:Repo) ASSERT n.name IS UNIQUE => to get unique nodes
 # CREATE CONSTRAINT ON (n:Language) ASSERT n.name IS UNIQUE
@@ -24,8 +26,8 @@ TOKEN = os.getenv("GH_KEY")
 headers = {'Authorization': f'bearer {TOKEN}'}
 
 
-def create_user(tx, login, location):
-    tx.run(f"CREATE (a:User {{login: '{login}',location:'{location}'}})")
+def create_user(tx, login):
+    tx.run(f"CREATE (a:User {{login: '{login}'}})")
 
 
 def create_repo(tx, name):
@@ -40,8 +42,9 @@ def create_lang_relation(tx, repo, lang, size):
     tx.run(f"MATCH (lang:Language{{name:'{lang}'}}),(repo:Repo{{name:'{repo}'}}) CREATE UNIQUE (repo)-[r:CONTAINS{{size:{size}}}]->(lang) return r")
 
 
-def create_relation(tx, repo, user):
-    tx.run(f"MATCH (user:User{{login:'{user}'}}),(repo:Repo{{name:'{repo}'}}) CREATE UNIQUE (user)-[r:CONTRIBUTES]->(repo) return r")
+def create_relation(tx, repo, user, contributionsCount):
+    tx.run(
+        f"MATCH (user:User{{login:'{user}'}}),(repo:Repo{{name:'{repo}'}}) CREATE UNIQUE (user)-[r:CONTRIBUTES{{count: {contributionsCount}}}]->(repo) return r")
 
 
 def build_knows_relation(tx):
@@ -58,6 +61,70 @@ def compute_pagerank(tx):
     tx.run("CALL algo.pageRank('User','KNOWS',{iterations:20, dampingFactor:0.85, write: true,writeProperty:'pagerank'})")
 
 
+def users_from_repo(owner, name, after=None):
+    if after is not None:
+        after = f"\"{after}\""
+    else:
+        after = "null"
+    query = f"""
+    query {{
+      repository(name: "{name}", owner: "{owner}") {{
+        mentionableUsers(first: 100, after: {after}) {{
+          totalCount
+          pageInfo {{
+            hasNextPage
+            endCursor
+            hasPreviousPage
+            startCursor
+          }}
+          nodes {{
+            ... on User {{
+              login
+            }}
+          }}
+        }}
+      }}
+    }}
+    """
+    endpoint = HTTPEndpoint(url, headers)
+    try:
+        repo_users = endpoint(query)['data']['repository']['mentionableUsers']
+    except Exception as e:
+        print(query)
+        print(e)
+        print(type(e))
+        return
+
+    hasNext = repo_users['pageInfo']['hasNextPage']
+    next = repo_users['pageInfo']['endCursor']
+    users = list(map(lambda node: node['login'], repo_users['nodes']))
+
+    return hasNext, next, users
+
+
+def process_repo(repo_name, max_hops):
+    [owner, name] = str.split(repo_name, '/')
+
+    if repo_name in repos_already_done:
+        return
+    else:
+        print(f"add repo:{repo_name} to already done")
+        repos_already_done.add(repo_name)
+
+    users = []
+
+    hasNext = True
+    next = None
+
+    while hasNext:
+        (hasNext, next, users_retrieved) = users_from_repo(owner, name, next)
+        users.extend(users_retrieved)
+    # TODO get languages and link
+    for u in users:
+        if u not in users_already_done:
+            users_to_process.put((u, max_hops))
+
+
 def query_for_user(login, max_hops=3):
     if max_hops < 0:
         return
@@ -70,33 +137,14 @@ def query_for_user(login, max_hops=3):
     query = f"""
     query{{
       user(login: "{login}") {{
-        name
-        login
-        location
-        repositoriesContributedTo(includeUserRepositories: true ,first: 100, orderBy: {{field: PUSHED_AT, direction: DESC}}, contributionTypes: [COMMIT, PULL_REQUEST], privacy:PUBLIC) {{
-          nodes {{
-            name
-            nameWithOwner
-            owner{{login}}
-            languages(orderBy: {{field: SIZE, direction: DESC}}, first: 3) {{
-              totalSize
-              edges {{
-                size
-                node {{
-                  name
-                  id
-                  color
-                }}
-              }}
-            }}
-            mentionableUsers(first: 100) {{
-              nodes {{
-                ... on User {{
-                  login
-                  name
-                  location
-                }}
-              }}
+        contributionsCollection {{
+          commitContributionsByRepository(maxRepositories: 100) {{
+            repository {{
+              nameWithOwner
+              isPrivate
+            }}          
+            contributions(first: 100) {{
+              totalCount
             }}
           }}
         }}
@@ -111,117 +159,47 @@ def query_for_user(login, max_hops=3):
         print(type(e))
         return
 
-    repos = user['repositoriesContributedTo']['nodes']
-    print(user['name'])
+    commit_by_repo = list(filter(lambda contrib: not contrib['repository']['isPrivate'], user['contributionsCollection']['commitContributionsByRepository']))
     try:
-        driver.session().write_transaction(create_user, user['login'], user['location'])
-    except ConstraintError:
-        print("User already exists")
+        driver.session().write_transaction(create_user, login)
     except:
-        print("Problem creating user")
-
-    print("=======")
-    for repo in repos:
-        print(repo['nameWithOwner'])
-        print(repo)
+        pass
+    for contribRepo in commit_by_repo:
+        repo_name = contribRepo['repository']['nameWithOwner']
+        contribs = contribRepo['contributions']['totalCount']
         try:
-            driver.session().write_transaction(create_repo, repo['nameWithOwner'])
-        except ConstraintError:
-            print("Repo already exists")
+            driver.session().write_transaction(create_repo, repo_name)
         except:
-            print("Problem creating repo")
-        driver.session().write_transaction(create_relation, repo['nameWithOwner'], user['login'])
+            pass
+        driver.session().write_transaction(create_relation, repo_name, login, contribs)
+        if repo_name not in repos_already_done:
+            repos_to_process.put(repo_name)
 
-        if repo['languages']:
-            languages = repo['languages']
-            for edge in languages['edges']:
-                size = edge['size']
-                lang = edge['node']
-                try:
-                    driver.session().write_transaction(create_lang, lang['name'])
-                except ConstraintError:
-                    print("language already exists")
-                driver.session().write_transaction(create_lang_relation, repo['nameWithOwner'], lang['name'], size)
+    while not repos_to_process.empty():
+        process_repo(repos_to_process.get(), max_hops - 1)
 
-        query_for_mentionable_users(repo['owner']['login'], repo['name'])
-
-    while not to_process.empty():
-        query_for_user(to_process.get(), max_hops - 1)
+    while not users_to_process.empty():
+        (u, hops) = users_to_process.get()
+        query_for_user(u, hops)
 
 
-def query_for_mentionable_users(repo_owner, repo_name, after=None):
-    if isinstance(after, str):
-        after = f"\"{after}\""
-    else:
-        after = "null"
+query_for_user("Angorance", 2)
+# query_for_user("Dawen18", 1)
+# query_for_user("Angorance")
+# query_for_user("stevenliatti")
+# query_for_user("Xcaliburne")
+# query_for_user("lekikou")
+# query_for_user("ProtectedVariable")
+# query_for_user("RaedAbr")
+# query_for_user("RalfJung")
+# query_for_user("selinux")
+# query_for_user("ry")
+# query_for_user("torvalds")
+# query_for_user("matoran")
+# query_for_user("anirul")
 
-    query = f"""
-    query {{
-      repository(owner: "{repo_owner}", name: "{repo_name}") {{
-        name
-        nameWithOwner
-        mentionableUsers(first: 10, after: {after}) {{
-          totalCount
-          pageInfo {{
-            hasNextPage
-            endCursor
-            hasPreviousPage
-            startCursor
-          }}
-          nodes {{
-            ... on User {{
-              login
-              name
-              location
-            }}
-          }}
-        }}
-      }}
-    }}
-    """
-    endpoint = HTTPEndpoint(url, headers)
-    try:
-        repo = endpoint(query)['data']['repository']
-    except Exception as e:
-        print(e)
-        print(type(e))
-        return
-    if repo['mentionableUsers']:
-        for collab in repo['mentionableUsers']['nodes']:
-            print(collab)
-            if collab['login'] not in users_already_done:
-                to_process.put(collab['login'])
-            try:
-                driver.session().write_transaction(create_user, collab['login'], collab['location'])
-            except ConstraintError:
-                print("User already exists")
-            except:
-                print("Problem creating user")
-            driver.session().write_transaction(create_relation, repo['nameWithOwner'], collab['login'])
-
-    if repo['mentionableUsers']['pageInfo']['hasNextPage']:
-        query_for_mentionable_users(repo_owner, repo_name, repo['mentionableUsers']['pageInfo']['endCursor'])
-
-    return
-
-
-query_for_user("maximelovino")
-query_for_user("Dawen18", 1)
-query_for_user("Angorance")
-query_for_user("stevenliatti")
-query_for_user("Xcaliburne")
-query_for_user("lekikou")
-query_for_user("ProtectedVariable")
-query_for_user("RaedAbr")
-query_for_user("RalfJung")
-query_for_user("selinux")
-query_for_user("ry")
-query_for_user("torvalds")
-query_for_user("matoran")
-query_for_user("anirul")
-
-driver.session().write_transaction(build_knows_relation)
-driver.session().write_transaction(build_codes_relation)
-driver.session().write_transaction(compute_pagerank)
+# driver.session().write_transaction(build_knows_relation)
+# driver.session().write_transaction(build_codes_relation)
+# driver.session().write_transaction(compute_pagerank)
 
 driver.close()
