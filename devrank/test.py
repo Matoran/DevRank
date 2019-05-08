@@ -1,13 +1,9 @@
-import sys
-
-from sgqlc.endpoint.http import HTTPEndpoint
-from dotenv import load_dotenv
 import os
 import queue
 
+from dotenv import load_dotenv
 from neo4j import GraphDatabase
-
-from neobolt.exceptions import ConstraintError
+from sgqlc.endpoint.http import HTTPEndpoint
 
 load_dotenv()
 
@@ -110,7 +106,7 @@ def process_repo(repo_name, max_hops):
     if repo_name in repos_already_done:
         return
     else:
-        print(f"add repo:{repo_name} to already done")
+        print(f"add repo:{repo_name} to already done - Hops {max_hops}")
         repos_already_done.add(repo_name)
 
     users = []
@@ -128,13 +124,16 @@ def process_repo(repo_name, max_hops):
 
 
 def query_for_user(login, max_hops=3):
+    if "[" in login:
+        print(f"Skipping {login} because []")
+        return
     if max_hops < 0:
         return
     if login in users_already_done:
         print(f"login already done {login}")
         return
     else:
-        print(f"add {login} to already done")
+        print(f"add {login} to already done - Hops {max_hops}")
         users_already_done.add(login)
     query = f"""
     query{{
@@ -169,23 +168,28 @@ def query_for_user(login, max_hops=3):
     for contribRepo in commit_by_repo:
         repo_name = contribRepo['repository']['nameWithOwner']
         contribs = contribRepo['contributions']['totalCount']
+        if max_hops > 0:
+            try:
+                driver.session().write_transaction(create_repo, repo_name)
+            except:
+                pass
         try:
-            driver.session().write_transaction(create_repo, repo_name)
+            driver.session().write_transaction(create_relation, repo_name, login, contribs)
         except:
             pass
-        driver.session().write_transaction(create_relation, repo_name, login, contribs)
         if repo_name not in repos_already_done:
             repos_to_process.put(repo_name)
 
     while not repos_to_process.empty():
         process_repo(repos_to_process.get(), max_hops - 1)
 
-    while not users_to_process.empty():
-        (u, hops) = users_to_process.get()
-        query_for_user(u, hops)
-
 
 query_for_user("Matoran", 2)
+while not users_to_process.empty():
+    (u, hops) = users_to_process.get()
+    query_for_user(u, hops)
+
+# TODO if a user has hops 0, don't insert in users_to_process but in orphans_to_process and do queries in parallel
 # query_for_user("Dawen18", 1)
 # query_for_user("Angorance")
 # query_for_user("stevenliatti")
