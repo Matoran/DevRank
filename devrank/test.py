@@ -103,6 +103,8 @@ def users_from_repo(owner, name, after=None):
 
 
 def process_repo(repo_name, max_hops):
+    if max_hops < 0:
+        return
     [owner, name] = str.split(repo_name, '/')
 
     if repo_name in repos_already_done:
@@ -183,7 +185,7 @@ def query_for_user(login, max_hops=3):
         query_for_user(u, hops)
 
 
-query_for_user("Angorance", 2)
+query_for_user("Matoran", 2)
 # query_for_user("Dawen18", 1)
 # query_for_user("Angorance")
 # query_for_user("stevenliatti")
