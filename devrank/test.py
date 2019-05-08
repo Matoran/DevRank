@@ -1,5 +1,6 @@
 import os
 import queue
+import threading
 
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
@@ -11,6 +12,7 @@ users_already_done = set()
 users_to_process = queue.Queue()
 repos_already_done = set()
 repos_to_process = queue.Queue()
+orphans_to_process = []
 
 # Used CREATE CONSTRAINT ON (n:User) ASSERT n.login IS UNIQUE / CREATE CONSTRAINT ON (n:Repo) ASSERT n.name IS UNIQUE => to get unique nodes
 # CREATE CONSTRAINT ON (n:Language) ASSERT n.name IS UNIQUE
@@ -120,7 +122,11 @@ def process_repo(repo_name, max_hops):
     # TODO get languages and link
     for u in users:
         if u not in users_already_done:
-            users_to_process.put((u, max_hops))
+            if max_hops == 0:
+                if u not in orphans_to_process:
+                    orphans_to_process.append(u)
+            else:
+                users_to_process.put((u, max_hops))
 
 
 def query_for_user(login, max_hops=3):
@@ -184,12 +190,36 @@ def query_for_user(login, max_hops=3):
         process_repo(repos_to_process.get(), max_hops - 1)
 
 
-query_for_user("Matoran", 2)
+class OrphanQueryThread(threading.Thread):
+    def __init__(self, users):
+        threading.Thread.__init__(self)
+        self.users = users
+
+    def run(self):
+        for username in self.users:
+            query_for_user(username, 0)
+
+
+query_for_user("Matoran", 1)
 while not users_to_process.empty():
     (u, hops) = users_to_process.get()
     query_for_user(u, hops)
 
-# TODO if a user has hops 0, don't insert in users_to_process but in orphans_to_process and do queries in parallel
+THREAD_COUNT = 4
+
+orphans_chunks = [orphans_to_process[i::THREAD_COUNT] for i in range(THREAD_COUNT)]  # This divides the orphans in THREAD_COUNT groups
+
+threads = list(map(lambda users: OrphanQueryThread(users), orphans_chunks))
+
+print("Launching threads for orphans")
+for t in threads:
+    t.start()
+print("Joining them...")
+for t in threads:
+    t.join()
+
+print("...Done")
+# TODO this is too fast so we get 403...this could work if we do our "safequery" in which we retry after a bit of time until it works (random in 0-2 seconds)
 # query_for_user("Dawen18", 1)
 # query_for_user("Angorance")
 # query_for_user("stevenliatti")
