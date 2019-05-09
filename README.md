@@ -52,9 +52,9 @@ The Python retrieval program is written in Python 3 and uses the following main 
 We use a [Neo4J](https://neo4j.com/) database with the [Graph Algorithms](https://github.com/neo4j-contrib/neo4j-graph-algorithms) and [APOC](https://github.com/neo4j-contrib/neo4j-apoc-procedures) plugins installed. The following constraints are applied in the database:
 
 ```cypher
-CREATE CONSTRAINT ON (n:User) ASSERT n.login IS UNIQUE
-CREATE CONSTRAINT ON (n:Repo) ASSERT n.name IS UNIQUE
-CREATE CONSTRAINT ON (n:Language) ASSERT n.name IS UNIQUE
+CREATE CONSTRAINT ON (n:User) ASSERT n.login IS UNIQUE;
+CREATE CONSTRAINT ON (n:Repo) ASSERT n.name IS UNIQUE;
+CREATE CONSTRAINT ON (n:Language) ASSERT n.name IS UNIQUE;
 ```
 
 ## How to run

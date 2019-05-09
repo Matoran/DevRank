@@ -1,6 +1,8 @@
 import os
 import queue
+import random
 import threading
+import time
 
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
@@ -19,6 +21,7 @@ orphans_to_process = []
 
 driver = GraphDatabase.driver("bolt://localhost:7687", auth=(os.getenv("DB_USER"), os.getenv("DB_PASS")))
 
+MAX_QUERY_RUNS = 20
 url = 'https://api.github.com/graphql'
 TOKEN = os.getenv("GH_KEY")
 headers = {'Authorization': f'bearer {TOKEN}'}
@@ -59,6 +62,22 @@ def compute_pagerank(tx):
     tx.run("CALL algo.pageRank('User','KNOWS',{iterations:20, dampingFactor:0.85, write: true,writeProperty:'pagerank'})")
 
 
+def safe_query(query):
+    runs = 0
+    while runs < MAX_QUERY_RUNS:
+        try:
+            endpoint = HTTPEndpoint(url, headers)
+            data = endpoint(query)['data']
+            if data is not None:
+                return data
+        except Exception as e:
+            runs = runs + 1
+            time.sleep(random.uniform(.100, 2))
+    print("Can't do request after 20 tries")
+    print(query)
+    exit(1)
+
+
 def users_from_repo(owner, name, after=None):
     if after is not None:
         after = f"\"{after}\""
@@ -84,14 +103,7 @@ def users_from_repo(owner, name, after=None):
       }}
     }}
     """
-    endpoint = HTTPEndpoint(url, headers)
-    try:
-        repo_users = endpoint(query)['data']['repository']['mentionableUsers']
-    except Exception as e:
-        print(query)
-        print(e)
-        print(type(e))
-        return
+    repo_users = safe_query(query)['repository']['mentionableUsers']
 
     hasNext = repo_users['pageInfo']['hasNextPage']
     next = repo_users['pageInfo']['endCursor']
@@ -158,13 +170,7 @@ def query_for_user(login, max_hops=3):
       }}
     }}
     """
-    endpoint = HTTPEndpoint(url, headers)
-    try:
-        user = endpoint(query)['data']['user']
-    except Exception as e:
-        print(e)
-        print(type(e))
-        return
+    user = safe_query(query)['user']
 
     commit_by_repo = list(filter(lambda contrib: not contrib['repository']['isPrivate'], user['contributionsCollection']['commitContributionsByRepository']))
     try:
@@ -200,6 +206,7 @@ class OrphanQueryThread(threading.Thread):
             query_for_user(username, 0)
 
 
+start = time.time()
 query_for_user("Matoran", 1)
 while not users_to_process.empty():
     (u, hops) = users_to_process.get()
@@ -219,6 +226,8 @@ for t in threads:
     t.join()
 
 print("...Done")
+end = time.time()
+print(f"Took {end - start} seconds")
 # TODO this is too fast so we get 403...this could work if we do our "safequery" in which we retry after a bit of time until it works (random in 0-2 seconds)
 # query_for_user("Dawen18", 1)
 # query_for_user("Angorance")
