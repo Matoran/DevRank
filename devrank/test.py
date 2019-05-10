@@ -208,7 +208,7 @@ class OrphanQueryThread(threading.Thread):
 
 
 start = time.time()
-query_for_user("Matoran", 2)
+query_for_user("Matoran", 1)
 while not users_to_process.empty():
     (u, hops) = users_to_process.get()
     query_for_user(u, hops)
@@ -219,7 +219,7 @@ orphans_chunks = [orphans_to_process[i::THREAD_COUNT] for i in range(THREAD_COUN
 
 threads = list(map(lambda users: OrphanQueryThread(users), orphans_chunks))
 
-print("Launching threads for orphans")
+print(f"Launching threads for orphans, count of orphans: {len(orphans_to_process)}")
 for t in threads:
     t.start()
 print("Joining them...")
