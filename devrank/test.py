@@ -170,9 +170,10 @@ def query_for_user(login, max_hops=3):
       }}
     }}
     """
-    user = safe_query(query)['user']
+    user = safe_query(query)['user']  # TODO here sometimes we have just a string with no user key, if no "user" key, return?
 
     commit_by_repo = list(filter(lambda contrib: not contrib['repository']['isPrivate'], user['contributionsCollection']['commitContributionsByRepository']))
+    # TODO here there could be a none type somewhere apparently, catch it and in this case just create the user and return?
     try:
         driver.session().write_transaction(create_user, login)
     except:
@@ -207,7 +208,7 @@ class OrphanQueryThread(threading.Thread):
 
 
 start = time.time()
-query_for_user("Matoran", 1)
+query_for_user("Matoran", 2)
 while not users_to_process.empty():
     (u, hops) = users_to_process.get()
     query_for_user(u, hops)
