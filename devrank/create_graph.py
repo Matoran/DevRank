@@ -6,6 +6,7 @@ import time
 
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
+from neobolt.exceptions import ConstraintError
 from sgqlc.endpoint.http import HTTPEndpoint
 
 load_dotenv()
@@ -16,7 +17,9 @@ repos_already_done = set()
 repos_to_process = queue.Queue()
 orphans_to_process = []
 
-# Used CREATE CONSTRAINT ON (n:User) ASSERT n.login IS UNIQUE / CREATE CONSTRAINT ON (n:Repo) ASSERT n.name IS UNIQUE => to get unique nodes
+# Used
+# CREATE CONSTRAINT ON (n:User) ASSERT n.login IS UNIQUE
+# CREATE CONSTRAINT ON (n:Repo) ASSERT n.name IS UNIQUE
 # CREATE CONSTRAINT ON (n:Language) ASSERT n.name IS UNIQUE
 
 driver = GraphDatabase.driver("bolt://localhost:7687", auth=(os.getenv("DB_USER"), os.getenv("DB_PASS")))
@@ -40,26 +43,52 @@ def create_lang(tx, name):
 
 
 def create_lang_relation(tx, repo, lang, size):
-    tx.run(f"MATCH (lang:Language{{name:'{lang}'}}),(repo:Repo{{name:'{repo}'}}) CREATE UNIQUE (repo)-[r:CONTAINS{{size:{size}}}]->(lang) return r")
+    tx.run(f"""
+            MATCH (lang:Language{{name:'{lang}'}}),(repo:Repo{{name:'{repo}'}}) 
+            CREATE UNIQUE (repo)-[r:CONTAINS{{size:{size}}}]->(lang) return r
+        """)
 
 
-def create_relation(tx, repo, user, contributionsCount):
-    tx.run(
-        f"MATCH (user:User{{login:'{user}'}}),(repo:Repo{{name:'{repo}'}}) CREATE UNIQUE (user)-[r:CONTRIBUTES{{count: {contributionsCount}}}]->(repo) return r")
+def create_relation(tx, repo, user, contributions_count):
+    tx.run(f"""
+            MATCH (user:User{{login:'{user}'}}),(repo:Repo{{name:'{repo}'}}) 
+            CREATE UNIQUE (user)-[r:CONTRIBUTES{{count: {contributions_count}}}]->(repo) return r
+        """)
 
 
 def build_knows_relation(tx):
     print("Building knows relationships")
-    tx.run("MATCH (u1:User)-[:CONTRIBUTES]->()<-[:CONTRIBUTES]-(u2:User) CREATE UNIQUE (u1)-[:KNOWS]->(u2)")
+    tx.run("""
+            MATCH (u1:User)-[c1:CONTRIBUTES]->()<-[c2:CONTRIBUTES]-(u2:User)
+            CALL apoc.merge.relationship(u1, 'KNOWS', {},{size: c2.count}, u2) YIELD rel
+            RETURN rel
+           """)
+    tx.run("""
+            MATCH (u1:User)-[c1:CONTRIBUTES]->()<-[c2:CONTRIBUTES]-(u2:User)
+            CALL apoc.merge.relationship(u2, 'KNOWS', {},{size: c1.count}, u1) YIELD rel
+            RETURN rel
+           """)
 
 
 def build_codes_relation(tx):
-    tx.run("MATCH (u1:User)-[:CONTRIBUTES]->()-[:CONTAINS]->(l:Language) CREATE UNIQUE (u1)-[:CODES_IN]->(l)")
+    tx.run("""
+            MATCH (u1:User)-[:CONTRIBUTES]->()-[:CONTAINS]->(l:Language)
+            CALL apoc.merge.relationship(u1, 'CODES_IN', {}, {size: r.size}, l) YIELD rel RETURN rel
+           """)
 
 
 def compute_pagerank(tx):
     print("calculating pagerank")
-    tx.run("CALL algo.pageRank('User','KNOWS',{iterations:20, dampingFactor:0.85, write: true,writeProperty:'pagerank'})")
+    tx.run("""
+            CALL algo.pageRank('User','KNOWS',
+            {
+               iterations:20, 
+               dampingFactor:0.85, 
+               write: true,
+               writeProperty:'pagerank', 
+               weightProperty: 'size'
+             })
+           """)
 
 
 def safe_query(query):
@@ -131,7 +160,6 @@ def process_repo(repo_name, max_hops):
     while hasNext:
         (hasNext, next, users_retrieved) = users_from_repo(owner, name, next)
         users.extend(users_retrieved)
-    # TODO get languages and link
     for u in users:
         if u not in users_already_done:
             if max_hops == 0:
@@ -161,6 +189,15 @@ def query_for_user(login, max_hops=3):
             repository {{
               nameWithOwner
               isPrivate
+              languages(first: 3, orderBy: {{field: SIZE, direction: DESC}}) {{
+                edges {{
+                  size
+                  node {{
+                    name
+                    color
+                  }}
+                }}
+              }}
             }}          
             contributions(first: 100) {{
               totalCount
@@ -170,28 +207,41 @@ def query_for_user(login, max_hops=3):
       }}
     }}
     """
-    user = safe_query(query)['user']  # TODO here sometimes we have just a string with no user key, if no "user" key, return?
+    user = safe_query(query)[
+        'user']  # TODO here sometimes we have just a string with no user key, if no "user" key, return?
 
-    commit_by_repo = list(filter(lambda contrib: not contrib['repository']['isPrivate'], user['contributionsCollection']['commitContributionsByRepository']))
+    commit_by_repo = list(filter(lambda contrib: not contrib['repository']['isPrivate'],
+                                 user['contributionsCollection']['commitContributionsByRepository']))
     # TODO here there could be a none type somewhere apparently, catch it and in this case just create the user and return?
     try:
         driver.session().write_transaction(create_user, login)
     except:
         pass
     for contribRepo in commit_by_repo:
-        repo_name = contribRepo['repository']['nameWithOwner']
+        repo = contribRepo['repository']
         contribs = contribRepo['contributions']['totalCount']
         if max_hops > 0:
             try:
-                driver.session().write_transaction(create_repo, repo_name)
+                driver.session().write_transaction(create_repo, repo['nameWithOwner'])
+                if repo['languages']:
+                    languages = repo['languages']
+                    for edge in languages['edges']:
+                        size = edge['size']
+                        lang = edge['node']
+                        try:
+                            driver.session().write_transaction(create_lang, lang['name'])
+                        except ConstraintError:
+                            print("language already exists")
+                        driver.session().write_transaction(create_lang_relation, repo['nameWithOwner'], lang['name'],
+                                                           size)
             except:
                 pass
         try:
-            driver.session().write_transaction(create_relation, repo_name, login, contribs)
+            driver.session().write_transaction(create_relation, repo['nameWithOwner'], login, contribs)
         except:
             pass
-        if repo_name not in repos_already_done:
-            repos_to_process.put(repo_name)
+        if repo['nameWithOwner'] not in repos_already_done:
+            repos_to_process.put(repo['nameWithOwner'])
 
     while not repos_to_process.empty():
         process_repo(repos_to_process.get(), max_hops - 1)
@@ -215,7 +265,8 @@ while not users_to_process.empty():
 
 THREAD_COUNT = 4
 
-orphans_chunks = [orphans_to_process[i::THREAD_COUNT] for i in range(THREAD_COUNT)]  # This divides the orphans in THREAD_COUNT groups
+orphans_chunks = [orphans_to_process[i::THREAD_COUNT] for i in
+                  range(THREAD_COUNT)]  # This divides the orphans in THREAD_COUNT groups
 
 threads = list(map(lambda users: OrphanQueryThread(users), orphans_chunks))
 
