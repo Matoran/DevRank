@@ -3,12 +3,14 @@ import queue
 import random
 import threading
 import time
+import dill as pickle
 
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 from neobolt.exceptions import ConstraintError
 from sgqlc.endpoint.http import HTTPEndpoint
-
+from datetime import datetime
+from collections import deque
 load_dotenv()
 
 users_already_done = set()
@@ -16,6 +18,8 @@ users_to_process = queue.Queue()
 repos_already_done = set()
 repos_to_process = queue.Queue()
 orphans_to_process = []
+
+
 
 # Used
 # CREATE CONSTRAINT ON (n:User) ASSERT n.login IS UNIQUE
@@ -26,8 +30,18 @@ driver = GraphDatabase.driver("bolt://localhost:7687", auth=(os.getenv("DB_USER"
 
 MAX_QUERY_RUNS = 20
 url = 'https://api.github.com/graphql'
-TOKEN = os.getenv("GH_KEY")
-headers = {'Authorization': f'bearer {TOKEN}'}
+headers = []
+for i in range(10):
+    TOKEN = os.getenv(f"GH_KEY{i}")
+    if TOKEN is None:
+        break
+    headers.append({'Authorization': f'bearer {TOKEN}'})
+
+
+def init_queues(tx):
+    result = tx.run("MATCH(u:User) RETURN u")
+    for record in result:
+        users_already_done.add(record['u']['login'])
 
 
 def create_user(tx, login):
@@ -59,21 +73,25 @@ def create_relation(tx, repo, user, contributions_count):
 def build_knows_relation(tx):
     print("Building knows relationships")
     tx.run("""
-            MATCH (u1:User)-[c1:CONTRIBUTES]->()<-[c2:CONTRIBUTES]-(u2:User)
-            CALL apoc.merge.relationship(u1, 'KNOWS', {},{size: c2.count}, u2) YIELD rel
-            RETURN rel
-           """)
-    tx.run("""
-            MATCH (u1:User)-[c1:CONTRIBUTES]->()<-[c2:CONTRIBUTES]-(u2:User)
-            CALL apoc.merge.relationship(u2, 'KNOWS', {},{size: c1.count}, u1) YIELD rel
-            RETURN rel
+            CALL apoc.periodic.iterate("MATCH (u1:User)-[c1:CONTRIBUTES]->()<-[c2:CONTRIBUTES]-(u2:User) WHERE u1.login < u2.login RETURN *",
+            "MERGE (u1)-[r:KNOWS]->(u2) 
+            ON CREATE SET r.size = c2.count 
+            ON MATCH SET r.size = r.size + c2.count 
+            MERGE (u2)-[r2:KNOWS]->(u1) 
+            ON CREATE SET r2.size = c1.count 
+            ON MATCH SET r2.size = r2.size + c1.count", 
+            {batchSize:1000})
+            YIELD batches,total
+            RETURN batches,total
            """)
 
 
 def build_codes_relation(tx):
     tx.run("""
-            MATCH (u1:User)-[:CONTRIBUTES]->()-[:CONTAINS]->(l:Language)
-            CALL apoc.merge.relationship(u1, 'CODES_IN', {}, {size: r.size}, l) YIELD rel RETURN rel
+            CALL apoc.periodic.iterate(
+            "MATCH (u1:User)-[r:CONTRIBUTES]->()-[:CONTAINS]->(l:Language) RETURN *",
+            "CALL apoc.merge.relationship(u1, 'CODES_IN', {}, {size: r.size}, l) YIELD rel RETURN rel", 
+            {batchSize:10000})
            """)
 
 
@@ -91,12 +109,32 @@ def compute_pagerank(tx):
            """)
 
 
-def safe_query(query):
+def safe_query(query, index=0):
     runs = 0
     while runs < MAX_QUERY_RUNS:
         try:
-            endpoint = HTTPEndpoint(url, headers)
-            data = endpoint(query)['data']
+            endpoint = HTTPEndpoint(url, headers[index])
+            data = endpoint(query)
+            if 'errors' in data:
+                print(data['errors'][0]['message'])
+                if 'Something went wrong while executing your query.' in data['errors'][0]['message']:
+                    return None
+                if data['errors'][0]['type'] == 'RATE_LIMITED':
+                    reset_at = endpoint("""
+                    {
+                        rateLimit {
+                        remaining
+                        resetAt
+                        limit
+                      }
+                    }
+                    """)['data']['rateLimit']['resetAt']
+                    diff = (datetime.strptime(reset_at, "%Y-%m-%dT%H:%M:%SZ") - datetime.utcnow())
+                    print(f"sleep until {reset_at}")
+                    time.sleep(diff.total_seconds() + 10)
+                    return safe_query(query)
+                return None
+            data = data['data']
             if data is not None:
                 return data
         except Exception as e:
@@ -169,7 +207,7 @@ def process_repo(repo_name, max_hops):
                 users_to_process.put((u, max_hops))
 
 
-def query_for_user(login, max_hops=3):
+def query_for_user(login, max_hops=3, index=0):
     if "[" in login:
         print(f"Skipping {login} because []")
         return
@@ -207,9 +245,10 @@ def query_for_user(login, max_hops=3):
       }}
     }}
     """
-    user = safe_query(query)[
-        'user']  # TODO here sometimes we have just a string with no user key, if no "user" key, return?
-
+    result = safe_query(query, index)
+    if result is None:
+        return
+    user = result['user']  # TODO here sometimes we have just a string with no user key, if no "user" key, return?
     commit_by_repo = list(filter(lambda contrib: not contrib['repository']['isPrivate'],
                                  user['contributionsCollection']['commitContributionsByRepository']))
     # TODO here there could be a none type somewhere apparently, catch it and in this case just create the user and return?
@@ -231,7 +270,7 @@ def query_for_user(login, max_hops=3):
                         try:
                             driver.session().write_transaction(create_lang, lang['name'])
                         except ConstraintError:
-                            print("language already exists")
+                            pass
                         driver.session().write_transaction(create_lang_relation, repo['nameWithOwner'], lang['name'],
                                                            size)
             except:
@@ -253,17 +292,20 @@ class OrphanQueryThread(threading.Thread):
         self.users = users
 
     def run(self):
+        index = 0
         for username in self.users:
-            query_for_user(username, 0)
+            query_for_user(username, 0, index)
+            index = (index + 1) % len(headers)
 
 
+driver.session().read_transaction(init_queues)
 start = time.time()
 query_for_user("Matoran", 1)
 while not users_to_process.empty():
     (u, hops) = users_to_process.get()
     query_for_user(u, hops)
-
-THREAD_COUNT = 4
+import math
+THREAD_COUNT = math.floor(len(headers) * 1.4)
 
 orphans_chunks = [orphans_to_process[i::THREAD_COUNT] for i in
                   range(THREAD_COUNT)]  # This divides the orphans in THREAD_COUNT groups
