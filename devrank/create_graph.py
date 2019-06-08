@@ -3,14 +3,14 @@ import queue
 import random
 import threading
 import time
-import dill as pickle
+from datetime import datetime
 
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 from neobolt.exceptions import ConstraintError
 from sgqlc.endpoint.http import HTTPEndpoint
-from datetime import datetime
-from collections import deque
+import math
+
 load_dotenv()
 
 users_already_done = set()
@@ -18,8 +18,6 @@ users_to_process = queue.Queue()
 repos_already_done = set()
 repos_to_process = queue.Queue()
 orphans_to_process = []
-
-
 
 # Used
 # CREATE CONSTRAINT ON (n:User) ASSERT n.login IS UNIQUE
@@ -248,10 +246,9 @@ def query_for_user(login, max_hops=3, index=0):
     result = safe_query(query, index)
     if result is None:
         return
-    user = result['user']  # TODO here sometimes we have just a string with no user key, if no "user" key, return?
+    user = result['user']
     commit_by_repo = list(filter(lambda contrib: not contrib['repository']['isPrivate'],
                                  user['contributionsCollection']['commitContributionsByRepository']))
-    # TODO here there could be a none type somewhere apparently, catch it and in this case just create the user and return?
     try:
         driver.session().write_transaction(create_user, login)
     except:
@@ -300,11 +297,11 @@ class OrphanQueryThread(threading.Thread):
 
 driver.session().read_transaction(init_queues)
 start = time.time()
-query_for_user("Matoran", 1)
+query_for_user("maximelovino", 2)
 while not users_to_process.empty():
     (u, hops) = users_to_process.get()
     query_for_user(u, hops)
-import math
+
 THREAD_COUNT = math.floor(len(headers) * 1.4)
 
 orphans_chunks = [orphans_to_process[i::THREAD_COUNT] for i in
@@ -322,7 +319,6 @@ for t in threads:
 print("...Done")
 end = time.time()
 print(f"Took {end - start} seconds")
-# TODO this is too fast so we get 403...this could work if we do our "safequery" in which we retry after a bit of time until it works (random in 0-2 seconds)
 # query_for_user("Dawen18", 1)
 # query_for_user("Angorance")
 # query_for_user("stevenliatti")

@@ -1,60 +1,77 @@
-<html>
+<!doctype html>
+<html lang="en">
 
 <head>
-    <title>DataViz</title>
-    <style type="text/css">
-        #viz {
-            width: 100%;
-            height: 100%;
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="Mark Otto, Jacob Thornton, and Bootstrap contributors">
+    <meta name="generator" content="Jekyll v3.8.5">
+    <title>Dashboard Template · Bootstrap</title>
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+        integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
+        integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
+        crossorigin="anonymous"></script>
+
+
+    <style>
+        .bd-placeholder-img {
+            font-size: 1.125rem;
+            text-anchor: middle;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        @media (min-width: 768px) {
+            .bd-placeholder-img-lg {
+                font-size: 3.5rem;
+            }
         }
     </style>
-    <script src="https://cdn.neo4jlabs.com/neovis.js/v1.0.0/neovis.js"></script>
+    <!-- Custom styles for this template -->
+    <link href="style.css" rel="stylesheet">
 </head>
-<script>
-    function draw() {
-        var config = {
-            interaction: {
-                hover: true,
-                keyboard: {
-                    enabled: true,
-                    bindToWindow: false
-                },
-                navigationButtons: true,
-                tooltipDelay: 1000000,
-                hideEdgesOnDrag: true,
-                zoomView: false
-            },
-            container_id: "viz",
-            server_url: "bolt://localhost:7687",
-            server_user: "neo4j",
-            server_password: "supergraph",
-            labels: {
-                "User": {
-                    caption: "login",
-                    size: "pagerank"
-                },
-                "Repo": {
-                    caption: "name"
-                },
 
-            },
-            relationships: {
-                "CONTRIBUTES": {
-                    caption: false,
-                    thickness: "count"
-                }
-            },
-            initial_cypher: 'MATCH p=(:User)-[:CONTRIBUTES]->(:Repo) RETURN p'
-            //initial_cypher: 'MATCH (tom:Person {name: "Tom Hanks"})-[r:ACTED_IN]->(tomHanksMovies)<- RETURN r,tom,tomHanksMovies',
-        }
-        var viz = new NeoVis.default(config);
-        viz.render();
+<body>
+    <nav class="navbar navbar-dark fixed-top bg-dark flex-md-nowrap p-0 shadow">
+        <a class="navbar-brand col-sm-3 col-md-2 mr-0" href="#">El Famoso Company</a>
+        <input id='search' class="form-control form-control-dark w-100" type="text" placeholder="Search"
+            aria-label="Search">
+        <span class="navbar-nav px-3">
+        </span>
+    </nav>
 
-    }
-</script>
+    <div class="container-fluid">
+        <div class="row">
+            <nav class="col-md-2 d-none d-md-block bg-light sidebar">
+                <div class="sidebar-sticky">
+                    <h6
+                        class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <span>Saved queries</span>
+                        <a class="d-flex align-items-center text-muted" href="#">
+                            <span data-feather="plus-circle"></span>
+                        </a>
+                    </h6>
+                    <div id="queries">
 
-<body onload="draw()">
-<div id="viz"></div>
+                    </div>
+                </div>
+            </nav>
+
+            <main id='viz' role="main" class="col-md-9 ml-sm-auto col-lg-10 px-4">
+            </main>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+        integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
+        crossorigin="anonymous"></script>
+    <script>window.jQuery || document.write('<script src="/docs/4.3/assets/js/vendor/jquery-slim.min.js"><\/script>')</script>
+    <script src="https://cdn.neo4jlabs.com/neovis.js/v1.0.0/neovis.js"></script>
+    <script src="viz.js"></script>
 </body>
 
 </html>
