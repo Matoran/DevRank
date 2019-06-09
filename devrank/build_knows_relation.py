@@ -35,9 +35,12 @@ def build_knows_relation(tx):
 def build_codes_relation(tx):
     tx.run("""
             CALL apoc.periodic.iterate(
-            "MATCH (u1:User)-[r:CONTRIBUTES]->()-[:CONTAINS]->(l:Language) RETURN *",
-            "CALL apoc.merge.relationship(u1, 'CODES_IN', {}, {size: r.count}, l) YIELD rel RETURN rel", 
+            "MATCH (u1:User)-[c:CONTRIBUTES]->()-[:CONTAINS]->(l:Language) RETURN *",
+            "MERGE (u1)-[r:CODES_IN]->(l) 
+                ON CREATE SET r.size = c.count 
+                ON MATCH SET r.size = r.size + c.count", 
             {batchSize:10000})
+            YIELD batches, total RETURN batches, total
            """)
 
 
