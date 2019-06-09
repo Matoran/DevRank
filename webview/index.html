@@ -125,16 +125,22 @@
     // Demo Neo4j database settings hosted on GrapheneDb
     popoto.rest.CYPHER_URL = 'http://localhost:7474/db/data/transaction/commit'
     // TODO récuperer les credentials d'une autre manière
-    popoto.rest.AUTHORIZATION = 'Basic ' + btoa('neo4j:devrank')
+    popoto.rest.AUTHORIZATION = 'Basic ' + btoa('neo4j:super')
 
     popoto.graph.WHEEL_ZOOM_ENABLED = false
 
     popoto.provider.node.Provider = {
         'User': {
             returnAttributes: ['login'],
+            constraintAttribute: 'login',
         },
         'Repo': {
-            returnAttributes: ['name']
+            returnAttributes: ['name'],
+            constraintAttribute: 'name',
+        },
+        'Language': {
+            returnAttributes: ['name'],
+            constraintAttribute: 'name',
         }
     }
 
