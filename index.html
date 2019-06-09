@@ -60,16 +60,62 @@
                     <div class="px-3 mt-4 mb-1">
                         <div class="form-group">
                             <label for="user1_path">User 1</label>
-                            <input type="text" class="form-control" id="user1_path" aria-describedby="emailHelp"
-                                placeholder="Enter login of first user">
+                            <select type="text" class="form-control form-control-chosen userSelect" id="user1_path"
+                                aria-describedby="emailHelp" placeholder="Enter login of first user">
+                                <option>Select option...</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label for="user2_path">User 2</label>
-                            <input type="text" class="form-control" id="user2_path" aria-describedby="emailHelp"
-                                placeholder="Enter login of second user">
+                            <select type="text" class="form-control form-control-chosen userSelect" id="user2_path"
+                                aria-describedby="emailHelp" placeholder="Enter login of second user">
+                                <option>Select option...</option>
+                            </select>
                         </div>
                         <button onclick="shortestPath()" class="btn btn-block btn-primary">Display shortest
                             path</button>
+                    </div>
+                    <h6
+                        class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <span>User centered information</span>
+                        <a class="d-flex align-items-center text-muted" href="#">
+                            <span data-feather="plus-circle"></span>
+                        </a>
+                    </h6>
+
+                    <div class="px-3 mt-4 mb-1">
+                        <div class="form-group">
+                            <label for="user">User</label>
+                            <select type="text" class="form-control form-control-chosen userSelect" id="user"
+                                aria-describedby="emailHelp" placeholder="Enter login of user">
+                                <option>Select option...</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-block btn-primary">Display user relations</button>
+                        <button class="btn btn-block btn-primary">Display user contributions</button>
+                        <button class="btn btn-block btn-primary">Display user languages</button>
+                    </div>
+
+                    <h6
+                        class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <span>Repositories centered information</span>
+                        <a class="d-flex align-items-center text-muted" href="#">
+                            <span data-feather="plus-circle"></span>
+                        </a>
+                    </h6>
+
+                    <div class="px-3 mt-4 mb-1">
+                        <div class="form-group">
+                            <label for="repo">Repository</label>
+                            <select class="form-control" id="repo" aria-describedby="repoHelp"
+                                placeholder="Enter full repo name">
+                            </select>
+                            <small id="repoHelp" class="form-text text-muted">Use full name, like
+                                "Matoran/DevRank"</small>
+
+                        </div>
+                        <button class="btn btn-block btn-primary">Display languages</button>
+                        <button class="btn btn-block btn-primary">Display contributors</button>
                     </div>
 
                     <h6
@@ -87,10 +133,13 @@
             </main>
         </div>
     </div>
-    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
-        integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
-        crossorigin="anonymous"></script>
-    <script>window.jQuery || document.write('<script src="/docs/4.3/assets/js/vendor/jquery-slim.min.js"><\/script>')</script>
+    <script src="https://unpkg.com/neo4j-driver@1.7.5/lib/browser/neo4j-web.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+
+    <link rel="stylesheet" href="chosen.css">
+    <script src="chosen.jquery.min.js"></script>
     <script src="https://cdn.neo4jlabs.com/neovis.js/v1.0.0/neovis.js"></script>
     <script src="viz.js"></script>
 </body>

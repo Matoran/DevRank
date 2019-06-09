@@ -1,4 +1,14 @@
 let viz;
+const neoURL = "bolt://localhost:7687"
+const neoUser = "neo4j"
+const neoPass = "supergraph"
+
+const driver = neo4j.v1.driver(
+	'bolt://localhost',
+	neo4j.v1.auth.basic(neoUser, neoPass)
+)
+const session = driver.session()
+
 function getConfig(query) {
 	var config = {
 		interaction: {
@@ -13,9 +23,9 @@ function getConfig(query) {
 			zoomView: false
 		},
 		container_id: "viz",
-		server_url: "bolt://localhost:7687",
-		server_user: "neo4j",
-		server_password: "supergraph",
+		server_url: neoURL,
+		server_user: neoUser,
+		server_password: neoPass,
 		labels: {
 			"User": {
 				caption: "login",
@@ -53,7 +63,7 @@ function getConfig(query) {
 
 
 function draw() {
-	const config = getConfig('MATCH p=(:User)-[:CONTRIBUTES]->(:Repo) RETURN p')
+	const config = getConfig('MATCH p=(:User)-[:CONTRIBUTES]->(:Repo) RETURN p LIMIT 300')
 	viz = new NeoVis.default(config);
 	viz.render();
 }
@@ -121,6 +131,7 @@ function selectedQuery(query) {
 	const searchBar = document.querySelector('#search')
 	searchBar.value = query;
 	searchBar.focus();
+	runNewQuery(query);
 }
 
 
@@ -150,12 +161,84 @@ function shortestPath() {
 	const user2 = document.querySelector('#user2_path').value
 
 	console.log(user1, user2)
-	const query = `MATCH (u1:User { login: '${user1}' }),(u2:User { login: '${user2}' }), p = shortestPath((u1)-[r:KNOWS *]-(u2))
-	RETURN p`
+	const query = `MATCH (u1:User { login: '${user1}' }),(u2:User { login: '${user2}' }), p = shortestPath((u1)-[r:KNOWS *]-(u2)) RETURN p`
 	selectedQuery(query);
+}
+
+
+function setupUserAutocomplete() {
+	const selects = document.querySelectorAll('.userSelect')
+
+
+	selects.forEach(s => {
+		const id = s.id
+		let select, chosen;
+
+		// Cache the select element as we'll be using it a few times
+		select = $(`#${id}`);
+
+
+		// Init the chosen plugin
+		select.chosen();
+
+		// Get the chosen object
+		chosen = select.data('chosen');
+
+		$(`#${id}_chosen .chosen-search input`).autocomplete({
+			source: function (request, response) {
+				console.warn(request)
+
+
+				session
+					.run(`MATCH (u:User) WHERE u.login STARTS WITH "${request.term}" RETURN u.login`)
+					.then(res => {
+						const autoSelect = $(`#${id}`)
+						const records = Array.from(res.records);
+						const names = records.map(r => r._fields[0]).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+						console.warn(names)
+						autoSelect.empty();
+						response($.map(names, function (n) {
+							autoSelect.append(`<option value="${n}">${n}</option>`);
+						}));
+						autoSelect.trigger("chosen:updated");
+					}).catch(error => {
+						console.log(error)
+					})
+			},
+			minLength: 3
+		});
+	})
+}
+
+function setupLanguagesAutocomplete() {
+	session
+		.run('MATCH (l:Language) return l.name')
+		.then(response => {
+			const records = Array.from(response.records);
+			const names = records.map(r => r._fields[0]).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+			console.log(names)
+		}).catch(error => {
+			console.log(error)
+		})
+}
+
+function setupReposAutocomplete() {
+	session
+		.run('MATCH (r:Repo) return r.name')
+		.then(response => {
+			const records = Array.from(response.records);
+			const names = records.map(r => r._fields[0]).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+			const repoSelect = document.querySelector('#repo')
+			repoSelect.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join('\n')
+		}).catch(error => {
+			console.log(error)
+		})
 }
 
 draw();
 generateQueries();
 
 setupSearch();
+setupUserAutocomplete();
+/*setupLanguagesAutocomplete();
+setupReposAutocomplete();*/
