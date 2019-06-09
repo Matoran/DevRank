@@ -120,7 +120,7 @@ function userRelations() {
 function userContributions(withContributors) {
     const user = document.querySelector('#user').value
 
-    const query = withContributors ? `MATCH p=(:User{login:'${user}'})-[:CONTRIBUTES]->()<-[:CONTRIBUTES]-(:User) RETURN p` : `MATCH (u1:User { login: '${user}' })-[k:CONTRIBUTES]->(r) RETURN *`
+    const query = withContributors ? `MATCH p=(:User{login:'${user}'})-[:CONTRIBUTES]->(r:Repo) MATCH p2=(u2:User)-[]->(r) return p,p2` : `MATCH (u1:User { login: '${user}' })-[k:CONTRIBUTES]->(r) RETURN *`
     selectedQuery(query);
 }
 
