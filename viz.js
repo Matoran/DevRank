@@ -53,7 +53,7 @@ function getConfig(query) {
 
 
 function draw() {
-	const config = getConfig('MATCH p=(:User{login:"maximelovino"})-[:CONTRIBUTES]->(:Repo) RETURN p')
+	const config = getConfig('MATCH p=(:User)-[:CONTRIBUTES]->(:Repo) RETURN p')
 	viz = new NeoVis.default(config);
 	viz.render();
 }
@@ -62,13 +62,16 @@ function runNewQuery(query) {
 	viz.renderWithCypher(query)
 }
 
-
 function generateQueries() {
 	//TODO add parameters field to help build dynamic form to replace them in query
 	const queries = [
 		{
+			name: "Display graph",
+			query: "MATCH p=(:User)-[:CONTRIBUTES]->(:Repo) RETURN p"
+		},
+		{
 			name: "User knows",
-			query: "MATCH p=(:User{login:'maximelovino'})-[:KNOWS]->() RETURN p"
+			query: "MATCH p=(:User{login:'maximelovino'})-[:KNOWS]->() RETURN p",
 		},
 		{
 			name: "User codes in",
@@ -77,6 +80,10 @@ function generateQueries() {
 		{
 			name: "User contributes",
 			query: "MATCH p=(:User{login:'maximelovino'})-[:CONTRIBUTES]->() RETURN p"
+		},
+		{
+			name: "User contributes with contributors",
+			query: "MATCH p=(:User{login:'maximelovino'})-[:CONTRIBUTES]->()<-[:CONTRIBUTES]-(:User) RETURN p"
 		},
 		{
 			name: "Shortest path between users",
@@ -136,6 +143,16 @@ function setupSearch() {
 			runNewQuery(searchBar.value);
 		}
 	})
+}
+
+function shortestPath() {
+	const user1 = document.querySelector('#user1_path').value
+	const user2 = document.querySelector('#user2_path').value
+
+	console.log(user1, user2)
+	const query = `MATCH (u1:User { login: '${user1}' }),(u2:User { login: '${user2}' }), p = shortestPath((u1)-[r:KNOWS *]-(u2))
+	RETURN p`
+	selectedQuery(query);
 }
 
 draw();

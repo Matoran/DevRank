@@ -38,7 +38,7 @@
 
 <body>
     <nav class="navbar navbar-dark fixed-top bg-dark flex-md-nowrap p-0 shadow">
-        <a class="navbar-brand col-sm-3 col-md-2 mr-0" href="#">El Famoso Company</a>
+        <span class="navbar-brand col-sm-3 col-md-2 mr-0">El Famoso Company</span>
         <input id='search' class="form-control form-control-dark w-100" type="text" placeholder="Search"
             aria-label="Search">
         <span class="navbar-nav px-3">
@@ -51,14 +51,35 @@
                 <div class="sidebar-sticky">
                     <h6
                         class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <span>Shortest path</span>
+                        <a class="d-flex align-items-center text-muted" href="#">
+                            <span data-feather="plus-circle"></span>
+                        </a>
+                    </h6>
+
+                    <div class="px-3 mt-4 mb-1">
+                        <div class="form-group">
+                            <label for="user1_path">User 1</label>
+                            <input type="text" class="form-control" id="user1_path" aria-describedby="emailHelp"
+                                placeholder="Enter login of first user">
+                        </div>
+                        <div class="form-group">
+                            <label for="user2_path">User 2</label>
+                            <input type="text" class="form-control" id="user2_path" aria-describedby="emailHelp"
+                                placeholder="Enter login of second user">
+                        </div>
+                        <button onclick="shortestPath()" class="btn btn-block btn-primary">Display shortest
+                            path</button>
+                    </div>
+
+                    <h6
+                        class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
                         <span>Saved queries</span>
                         <a class="d-flex align-items-center text-muted" href="#">
                             <span data-feather="plus-circle"></span>
                         </a>
                     </h6>
-                    <div id="queries">
-
-                    </div>
+                    <div id="queries"></div>
                 </div>
             </nav>
 
