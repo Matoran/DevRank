@@ -1,18 +1,17 @@
 <!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="description" content="">
     <meta name="author" content="Mark Otto, Jacob Thornton, and Bootstrap contributors">
     <meta name="generator" content="Jekyll v3.8.5">
-    <title>Dashboard Template · Bootstrap</title>
+    <title>DevRank - El Famoso Company</title>
 
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
-    integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
-    integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
-    crossorigin="anonymous"></script>
+        integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
 
     <style>
         .bd-placeholder-img {
@@ -33,11 +32,23 @@
     <!-- Custom styles for this template -->
     <link href="style.css" rel="stylesheet">
 </head>
+
 <body>
+    <div id="noRecordToast" class="toast" style="position: absolute; top: 100px; right: 2em;" data-autohide="false">
+        <div class="toast-header">
+            <strong class="mr-auto">No results</strong>
+            <button type="button" class="ml-2 mb-1 close" data-dismiss="toast" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+        <div class="toast-body">
+            The query didn't return any result.
+        </div>
+    </div>
     <nav class="navbar navbar-dark fixed-top bg-dark flex-md-nowrap p-0 shadow">
         <span class="navbar-brand col-sm-3 col-md-2 mr-0">El Famoso Company</span>
         <input id='search' class="form-control form-control-dark w-100" type="text" placeholder="Search"
-        aria-label="Search">
+            aria-label="Search">
         <span class="navbar-nav px-3">
         </span>
     </nav>
@@ -45,7 +56,8 @@
         <div class="row">
             <nav class="col-md-2 d-none d-md-block bg-light sidebar">
                 <div class="sidebar-sticky">
-                    <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                    <h6
+                        class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
                         <span>Shortest path</span>
                         <a class="d-flex align-items-center text-muted" href="#">
                             <span data-feather="plus-circle"></span>
@@ -55,16 +67,18 @@
                         <div class="form-group">
                             <label for="user1_path">User 1</label>
                             <select class="form-control basicAutoSelect" name="simple_select" id="user1_path"
-                            placeholder="type to search user..." autocomplete="off"></select>
+                                placeholder="type to search user..." autocomplete="off"></select>
                         </div>
                         <div class="form-group">
                             <label for="user2_path">User 2</label>
                             <select class="form-control basicAutoSelect" name="simple_select" id="user2_path"
-                            placeholder="type to search user..." autocomplete="off"></select>
+                                placeholder="type to search user..." autocomplete="off"></select>
                         </div>
-                        <button onclick="shortestPath()" class="btn btn-block btn-primary">Display shortest path</button>
+                        <button onclick="shortestPath()" class="btn btn-block btn-primary">Display shortest
+                            path</button>
                     </div>
-                    <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                    <h6
+                        class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
                         <span>User centered information</span>
                         <a class="d-flex align-items-center text-muted" href="#">
                             <span data-feather="plus-circle"></span>
@@ -75,14 +89,20 @@
                         <div class="form-group">
                             <label for="user">User</label>
                             <select class="form-control basicAutoSelect" name="simple_select" id="user"
-                            placeholder="type to search user..." autocomplete="off"></select>
+                                placeholder="type to search user..." autocomplete="off"></select>
                         </div>
-                        <button onclick="userRelations()" class="btn btn-block btn-primary">Display user relations</button>
-                        <button onclick="userContributions()" class="btn btn-block btn-primary">Display user contributions</button>
-                        <button onclick="userLanguages()" class="btn btn-block btn-primary">Display user languages</button>
+                        <button onclick="userRelations()" class="btn btn-block btn-primary">Display user
+                            relations</button>
+                        <button onclick="userContributions(false)" class="btn btn-block btn-primary">Display user
+                            contributions</button>
+                        <button onclick="userContributions(true)" class="btn btn-block btn-primary">Display user
+                            contributions (with contributors)</button>
+                        <button onclick="userLanguages()" class="btn btn-block btn-primary">Display user
+                            languages</button>
                     </div>
 
-                    <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                    <h6
+                        class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
                         <span>Repositories centered information</span>
                         <a class="d-flex align-items-center text-muted" href="#">
                             <span data-feather="plus-circle"></span>
@@ -93,20 +113,34 @@
                         <div class="form-group">
                             <label for="repo">Repository</label>
                             <select class="form-control basicAutoSelectRepos" name="simple_select" id="repo"
-                            placeholder="type to search repository..." autocomplete="off"></select>
-                            <small id="repoHelp" class="form-text text-muted">Use full name, like "Matoran/DevRank"</small>
+                                placeholder="type to search repository..." autocomplete="off"></select>
+                            <small id="repoHelp" class="form-text text-muted">Use full name, like
+                                "Matoran/DevRank"</small>
                         </div>
                         <button onclick="repoLanguages()" class="btn btn-block btn-primary">Display languages</button>
-                        <button onclick="repoContributors()" class="btn btn-block btn-primary">Display contributors</button>
+                        <button onclick="repoContributors()" class="btn btn-block btn-primary">Display
+                            contributors</button>
                     </div>
 
-                    <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
-                        <span>Saved queries</span>
+                    <h6
+                        class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <span>Languages centered information</span>
                         <a class="d-flex align-items-center text-muted" href="#">
                             <span data-feather="plus-circle"></span>
                         </a>
                     </h6>
-                    <div id="queries"></div>
+
+                    <div class="px-3 mt-4 mb-1">
+                        <div class="form-group">
+                            <label for="language">Language</label>
+                            <select class="form-control basicAutoSelectLanguages" name="simple_select" id="language"
+                                placeholder="type to search language..." autocomplete="off"></select>
+                        </div>
+                        <button onclick="languageTopRepos()" class="btn btn-block btn-primary">Display
+                            top repositories</button>
+                        <button onclick="languageTopDevs()" class="btn btn-block btn-primary">Display top
+                            developers</button>
+                    </div>
                 </div>
             </nav>
             <main id='viz' role="main" class="col-md-9 ml-sm-auto col-lg-10 px-4">
@@ -116,9 +150,12 @@
     <script src="https://unpkg.com/neo4j-driver@1.7.5/lib/browser/neo4j-web.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
     <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
-    <script src="https://cdn.neo4jlabs.com/neovis.js/v1.0.0/neovis.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/js/bootstrap.min.js" integrity="sha384-uefMccjFJAIv6A+rW+L4AHf99KvxDjWSu1z9VI8SKNVmz4sk7buKt/6v9KI65qnm" crossorigin="anonymous"></script>
+    <script src="neovis.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
+        integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
+        crossorigin="anonymous"></script>
     <script src="bootstrap-autocomplete.js"></script>
     <script src="viz.js"></script>
 </body>
+
 </html>
