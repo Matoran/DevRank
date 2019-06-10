@@ -335,18 +335,18 @@ def build_codes_relation(tx):
            """)
 
 
-def compute_pagerank(tx):
-    print("calculating pagerank")
+def compute_centrality(tx):
+    print("Computing centrality")
     tx.run("""
-            CALL algo.pageRank('User','KNOWS',
-            {
-               iterations:20, 
-               dampingFactor:0.85, 
-               write: true,
-               writeProperty:'pagerank', 
-               weightProperty: 'size'
-             })
-           """)
+    CALL algo.degree("User", "KNOWS", {direction: "outgoing", writeProperty: "centrality", weightProperty: "size"})
+    """)
+
+
+def community_detection(tx):
+    print("Running partitions")
+    tx.run("""
+    CALL algo.scc('User','KNOWS', {write:true,partitionProperty:'partition'})
+    """)
 
 
 start = time.time()
@@ -354,7 +354,8 @@ driver.session().write_transaction(delete_knows_relation)
 driver.session().write_transaction(delete_codes_relation)
 driver.session().write_transaction(build_knows_relation)
 driver.session().write_transaction(build_codes_relation)
-driver.session().write_transaction(compute_pagerank)
+driver.session().write_transaction(compute_centrality)
+driver.session().write_transaction(community_detection)
 print("...Done")
 end = time.time()
 print(f"Took {end - start} seconds for relations")

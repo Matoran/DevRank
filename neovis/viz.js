@@ -30,7 +30,8 @@ function getConfig(query) {
         labels: {
             "User": {
                 caption: "login",
-                size: "pagerank"
+                size: "centrality",
+                community: "partition"
             },
             "Repo": {
                 caption: "name"

@@ -1,12 +1,12 @@
 # DevRank
 
-DevRank is a project for a Web Mining class at HES-SO Master. The idea behind DevRank is to analyse the graph of connection between users and repositories on GitHub and apply the PageRank algorithm to define the influence of developers on the platform.
+DevRank is a project for a Web Mining class at HES-SO Master. The idea behind DevRank is to analyse the graph of connection between users and repositories on GitHub and apply the centrality algorithm to define the influence of developers on the platform.
 
 ![](assets/homepage.png)
 
 ## Context and project objectives
 
-The goal of the project is to create a visual search engine for GitHub. The idea is to be able to visualise the graph of GitHub connections between users, repositories and programming languages. Then, we shall run a pagerank algorithm in order to find the most influent developers on the platform, by using the weighted connections according to contributions count to projects. We will also try to detect clusters and closed communities as well as compute shortest paths between users.
+The goal of the project is to create a visual search engine for GitHub. The idea is to be able to visualise the graph of GitHub connections between users, repositories and programming languages. Then, we shall run a centrality algorithm in order to find the most influent developers on the platform, by using the weighted connections according to contributions count to projects. We will also try to detect clusters and closed communities as well as compute shortest paths between users.
 
 ## Data
 
@@ -22,7 +22,7 @@ The brain behind our platform will be a graph database, [Neo4J](https://neo4j.co
 
 We have 3 types of Nodes:
 
-- `User` which contains the `login` of the user and the `pagerank` field with the computed PageRank value
+- `User` which contains the `login` of the user, the `centrality` field with the computed centrality value and the `partition` field containing the ID of the partition for the user
 - `Repo` which contains the `name` of the repository, in this case the full name with `<owner>/<name>`
 - `Language` which contains the `name` of the language
 
@@ -68,22 +68,27 @@ YIELD batches, total RETURN batches, total
 
 This will create the relations by batches of size 10'000.
 
-### Calculating pagerank
+### Computing centrality
 
-The PageRank algorithm is provided in the [Graph Algorithms](https://github.com/neo4j-contrib/neo4j-graph-algorithms) library. In order to use the PageRank algorithm, we need to use relations between two nodes of the same type, so we use `KNOWS` relations between users and the weight of those relations. We also use APOC in order to separate the computing in batches to avoid overloading our server:
+We use a centrality measure in order to determine the influence of users on the platform. The algorithm is provided in the [Graph Algorithms](https://github.com/neo4j-contrib/neo4j-graph-algorithms) library and is called *Degree Centrality*. We use the outgoing `KNOWS` Relations from users with the weigth from `size` of the Relations:
 
 ```cypher
-CALL algo.pageRank('User','KNOWS',
-{
-   iterations:20, 
-   dampingFactor:0.85, 
-   write: true,
-   writeProperty:'pagerank', 
-   weightProperty: 'size'
- })
+CALL algo.degree("User", "KNOWS", {direction: "outgoing", writeProperty: "centrality", weightProperty: "size"})
 ```
 
-We can see that we specify the type of node, the type of relations and the property for our weight. The PageRank can be computed as many times as we want without needing to delete the precedent PageRank result because it will start by initialising the values correctly.
+#### Why we didn't use PageRank
+
+Initially, we planned on using the PageRank algorithm to compute the influcence of users. The problem is that we can have groups of users with all `KNOWS` inside the group and no Relations going outside the group. This is called a *Spider Trap* in the PageRank algorithm and will lead to boost the PageRank of users in that group and take all the importance.
+
+### Finding communities with Strongly Connected Components
+
+We use the [*Strongly Connected Components*](https://neo4j.com/docs/graph-algorithms/current/algorithms/strongly-connected-components/index.html) algorithm to detect clusters in the graph and split the users in communities. We use the `KNOWS` Relations here to determine communities:
+
+```cypher
+CALL algo.scc('User','KNOWS', {write:true,partitionProperty:'partition'})
+```
+
+
 
 ### Retrieval process
 
@@ -114,7 +119,8 @@ Finally, once the retrieval of `orphans_to_process` is done, we join the threads
 2. We delete existing `CODES_IN` relations
 3. We create all `KNOWS` relations
 4. We create all `CODES_IN` relations
-5. We compute the pagerank for all users.
+5. We compute the centrality for all users.
+6. We compute the communities with *Strongly Connected Components*
 
 The relations are deleted here before recreating them because they are build by adding to existing relations, so if they already exist before starting, the results wouldn't be consistent.
 
@@ -235,7 +241,8 @@ We configured Neovis with the settings according to our schema:
 	labels: {
 		"User": {
 			caption: "login",
-			size: "pagerank"
+			size: "centrality",
+      community: "partition"
 		},
 		"Repo": {
 			caption: "name"
@@ -265,7 +272,7 @@ We configured Neovis with the settings according to our schema:
 }
 ```
 
-This allows to specify thickness of relations according to the `size` or `count` in our case and for users we increase the size according to the PageRank. We can see the thickness of links for the different repositories here in the top Scala repositories for example:
+This allows to specify thickness of relations according to the `size` or `count` in our case and for users we increase the size according to the centrality value. We also use the `community` field to specify coloring differently according to `partition` of user. We can see the thickness of links for the different repositories here in the top Scala repositories for example:
 
 ![](assets/topScala.png)
 
@@ -319,3 +326,4 @@ python create_graph.py <seedUser> <numberOfHops>
 
 ## Conclusion
 
+We really enjoyed working on this project and exploring GitHub data. We had to find "hacky" solutions like the round robin of keys to increase limits and we love having to do that. We reached all the objectives we set for the project and even developed a more complete frontend than we hoped in the beginning.
