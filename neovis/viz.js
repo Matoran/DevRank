@@ -2,6 +2,7 @@ let viz;
 const neoURL = "bolt://localhost:7687"
 const neoUser = "neo4j"
 const neoPass = "supergraph"
+const initQuery = 'MATCH p=(:User)-[:CONTRIBUTES]->(:Repo) RETURN p LIMIT 300'
 
 const driver = neo4j.v1.driver(
     'bolt://localhost',
@@ -63,21 +64,23 @@ function getConfig(query) {
 
 
 function draw() {
-    const config = getConfig('MATCH p=(:User)-[:CONTRIBUTES]->(:Repo) RETURN p LIMIT 300')
+    const config = getConfig(initQuery)
     viz = new NeoVis.default(config);
     viz.registerOnEvent('completed', renderComplete)
     viz.render();
+    selectedQuery(initQuery, false)
 }
 
 function runNewQuery(query) {
     viz.renderWithCypher(query)
 }
 
-function selectedQuery(query) {
+function selectedQuery(query, run = true) {
     const searchBar = document.querySelector('#search')
     searchBar.value = query;
     searchBar.focus();
-    runNewQuery(query);
+    if (run)
+        runNewQuery(query);
 }
 
 
@@ -100,6 +103,10 @@ function setupSearch() {
             runNewQuery(searchBar.value);
         }
     })
+}
+
+function initialQuery() {
+    selectedQuery(initQuery);
 }
 
 function shortestPath() {

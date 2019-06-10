@@ -269,7 +269,7 @@ if len(sys.argv) < 3:
 user = sys.argv[1]
 hops = int(sys.argv[2])
 print(f"Seed is {user} with {hops} hops")
-query_for_user(user, hops)
+users_to_process.put((user, hops))
 while not users_to_process.empty():
     (u, hops) = users_to_process.get()
     query_for_user(u, hops)
