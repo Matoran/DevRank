@@ -158,7 +158,7 @@ All the inputs in the sidebar are implemented with an autocomplete for the speci
 
 ### Queries
 
-### "Full graph" query
+#### "Full graph" query
 
 Our *full graph* query is loaded at the beginning and consists of the GitHub graph as we imagine it with user, repositories and `CONTRIBUTES` relations only. Only 300 elements are displayed and the query is the following:
 
@@ -198,7 +198,7 @@ MATCH p=(:User{login:'${user}'})-[:CONTRIBUTES]->(r:Repo) MATCH p2=(u2:User)-[]-
 
 This last query uses two matches to get all repositories the user contributes to and eventual other contributors for those repositories.
 
-### Repositories centered queries
+#### Repositories centered queries
 
 To display languages and contributors respectively:
 
@@ -210,7 +210,7 @@ MATCH (u1:Repo { name: '${repo}' })-[k:CONTAINS]->(l) RETURN *
 MATCH (u1:Repo { name: '${repo}' })<-[k:CONTRIBUTES]-(u) RETURN *
 ```
 
-### Languages centered queries
+#### Languages centered queries
 
 For language queries, we display the top 100, otherwise it can quickly become too big for Neovis.
 
@@ -225,6 +225,49 @@ To display the top users for the language, we also order by the size of code in 
 ```cypher
 MATCH p=((u:User)-[c:CODES_IN]->(n:Language{name:'${language}'})) WITH u,c,p ORDER BY c.size DESC LIMIT 100 RETURN p
 ```
+
+### Neovis configuration
+
+We configured Neovis with the settings according to our schema:
+
+```js
+{
+	labels: {
+		"User": {
+			caption: "login",
+			size: "pagerank"
+		},
+		"Repo": {
+			caption: "name"
+		},
+		"Language": {
+			caption: "name"
+		},
+	},
+	relationships: {
+		"CONTRIBUTES": {
+			caption: false,
+			thickness: "count"
+		},
+		"KNOWS": {
+			caption: false,
+			thickness: "size"
+		},
+		"CONTAINS": {
+			caption: false,
+			thickness: "size"
+		},
+		"CODES_IN": {
+			caption: false,
+			thickness: "size"
+		}
+	}
+}
+```
+
+This allows to specify thickness of relations according to the `size` or `count` in our case and for users we increase the size according to the PageRank. We can see the thickness of links for the different repositories here in the top Scala repositories for example:
+
+![](assets/topScala.png)
 
 ## Tools used
 
