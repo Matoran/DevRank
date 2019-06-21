@@ -338,7 +338,7 @@ def build_codes_relation(tx):
 def compute_centrality(tx):
     print("Computing centrality")
     tx.run("""
-    CALL algo.degree("User", "KNOWS", {direction: "outgoing", writeProperty: "centrality", weightProperty: "size"})
+    CALL algo.degree("User", "KNOWS", {direction: "incoming", writeProperty: "centrality", weightProperty: "size"})
     """)
 
 
